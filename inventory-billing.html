@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inventory & Billing — Simple POS (Customer Pricing)</title>
+<style>
+  :root{
+    --bg:#0b1020; --card:#121a32; --muted:#9fb0d0; --text:#e7eeff;
+    --accent:#6aa6ff; --accent-2:#7bffca; --danger:#ff5d6c; --ok:#61d095;
+    --border:#233052; --chip:#1b2747;
+  }
+  *{box-sizing: border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:linear-gradient(180deg,#0b1020 0%, #0e1430 100%);
+    color:var(--text); font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  }
+  header{
+    position:sticky; top:0; z-index:10; backdrop-filter: blur(8px);
+    background:rgba(11,16,32,.7); border-bottom:1px solid var(--border);
+  }
+  .wrap{max-width:1200px; margin:0 auto; padding:16px}
+  .bar{display:flex; align-items:center; gap:12px; justify-content:space-between}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700}
+  .badge{padding:.2rem .5rem; border:1px dashed var(--border); border-radius:999px; color:var(--muted); font-size:12px}
+  .nav{display:flex; gap:8px; flex-wrap:wrap}
+  .tab{
+    border:1px solid var(--border); background:var(--chip); color:var(--text);
+    padding:.55rem .8rem; border-radius:12px; cursor:pointer; transition:all .12s ease;
+  }
+  .tab.active, .tab:hover{border-color:var(--accent); box-shadow:0 0 0 2px rgba(106,166,255,.18) inset}
+  
+  .search-box{
+    display:flex; gap:8px; align-items:center; margin-left:16px;
+  }
+  .search-box input{
+    width:280px; padding:.5rem .7rem; border-radius:8px;
+    background:rgba(15,23,48,.8); border:1px solid var(--border);
+  }
+  .search-box .btn{
+    padding:.5rem .7rem; border-radius:8px; min-width:40px;
+  }
+  
+  .alert{
+    padding:.6rem .75rem; border-radius:8px; margin:8px 0;
+    border-left:4px solid var(--accent);
+  }
+  .alert.warning{border-left-color:#ffa726; background:rgba(255,167,38,.1)}
+  .alert.danger{border-left-color:var(--danger); background:rgba(255,93,108,.1)}
+  .alert.success{border-left-color:var(--ok); background:rgba(97,208,149,.1)}
+  
+  .stats-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;
+  }
+  .stat-card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:16px; text-align:center;
+  }
+  .stat-number{font-size:24px; font-weight:700; color:var(--accent)}
+  .stat-label{font-size:12px; color:var(--muted); margin-top:4px}
+  main .wrap{display:grid; grid-template-columns: 290px 1fr; gap:16px; padding-top:18px}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:18px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25); padding:16px;
+  }
+  h2{margin:0 0 10px 0; font-size:18px}
+  h3{margin:0 0 10px 0; font-size:15px; color:var(--muted)}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+  label{font-size:12px; color:var(--muted)}
+  input, select, textarea{
+    width:100%; padding:.65rem .7rem; border-radius:12px; border:1px solid var(--border);
+    background:#0f1730; color:var(--text); outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--accent); box-shadow:0 0 0 2px rgba(106,166,255,.15)}
+  .btn{
+    appearance:none; border:1px solid var(--border); background:var(--chip); color:var(--text);
+    padding:.65rem .9rem; border-radius:12px; cursor:pointer; transition:.12s;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:linear-gradient(90deg, var(--accent), var(--accent-2)); color:#021225; font-weight:700; border:none}
+  .btn.danger{background:linear-gradient(90deg,#ff5d6c,#ff8a7b); color:#210; border:none}
+  .btn.ghost{background:transparent; border:1px dashed var(--border); color:var(--muted)}
+  table{width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:14px; border:1px solid var(--border)}
+  th, td{padding:.6rem .7rem; border-bottom:1px solid var(--border); text-align:left}
+  th{background:#0e1733; color:#c9d6f4; font-weight:600; font-size:13px}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-flex; gap:6px; align-items:center; padding:.2rem .55rem; border-radius:999px; background:#0f1d3c; border:1px solid var(--border); color:var(--muted); font-size:12px}
+  .muted{color:var(--muted)}
+  .flex{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .right{margin-left:auto}
+  .spacer{height:8px}
+  .hr{height:1px; background:var(--border); margin:10px 0}
+  .totals{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .totals .n{display:flex; justify-content:space-between}
+  .sticky-actions{position:sticky; bottom:0; background:linear-gradient(180deg, rgba(18,26,50,.1), rgba(18,26,50,1)); padding-top:8px}
+  .notice{padding:.6rem .75rem; border:1px dashed var(--border); border-radius:12px; background:#0e1733; color:#cfe3ff}
+  .mini{font-size:12px}
+  .tag{font-size:11px; color:#b7c7e9}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+  .nowrap{white-space:nowrap}
+  .w-60{width:60px}
+  .w-90{width:90px}
+  @media (max-width: 1000px){ main .wrap{grid-template-columns:1fr} }
+  /* PRINT */
+  @media print{
+    body{background:white; color:black}
+    header, .no-print{display:none !important}
+    .print-area{display:block !important}
+    .print-invoice{
+      font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      color:#000; width:210mm; margin:0 auto; padding:18mm 16mm;
+    }
+    .print-invoice h1{font-size:20px; margin:0 0 6px 0}
+    .print-invoice table{width:100%; border:1px solid #000; border-collapse:collapse}
+    .print-invoice th, .print-invoice td{border:1px solid #000; padding:6px}
+  }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <div class="bar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="url(#g)" stroke-width="2" stroke-linecap="round"/><defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#6aa6ff"/><stop offset="1" stop-color="#7bffca"/></linearGradient></defs></svg>
+      <span>Inventory & Billing</span>
+      <span class="badge">Customer-specific pricing</span>
+    </div>
+    <div class="nav no-print">
+      <button class="tab active" data-v="orders">Orders</button>
+      <button class="tab" data-v="customers">Customers</button>
+      <button class="tab" data-v="products">Products</button>
+      <button class="tab" data-v="prices">Price Lists</button>
+      <button class="tab" data-v="history">Order History</button>
+      <button class="tab" data-v="analytics">Analytics</button>
+      <button class="tab" data-v="settings">Settings</button>
+    </div>
+    <div class="search-box no-print">
+      <input type="text" id="global-search" placeholder="Search products, customers, orders..." />
+      <button class="btn" onclick="performGlobalSearch()">🔍</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <!-- LEFT: Management -->
+    <section class="card no-print" id="left-panel">
+      <h2>Quick Add</h2>
+      <div class="spacer"></div>
+
+      <div class="row">
+        <div>
+          <label>New Customer</label>
+          <input id="c-name" placeholder="Name (e.g. Rafi)" />
+        </div>
+        <div>
+          <label>Phone / Note</label>
+          <input id="c-phone" placeholder="Optional" />
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="flex">
+        <button class="btn" onclick="addCustomer()">Add Customer</button>
+        <span class="pill">Customers: <span id="count-customers">0</span></span>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="row3">
+        <div>
+          <label>Product Name</label>
+          <input id="p-name" placeholder="e.g. White T-Shirt" />
+        </div>
+        <div>
+          <label>SKU</label>
+          <input id="p-sku" placeholder="e.g. TS-001" />
+        </div>
+        <div>
+          <label>Unit</label>
+          <input id="p-unit" placeholder="e.g. pcs / kg" />
+        </div>
+      </div>
+      <div class="row3" style="margin-top:10px">
+        <div>
+          <label>Base Price (৳)</label>
+          <input id="p-price" type="number" min="0" step="0.01" placeholder="e.g. 300" />
+        </div>
+        <div>
+          <label>Stock</label>
+          <input id="p-stock" type="number" min="0" step="1" placeholder="e.g. 50" />
+        </div>
+        <div>
+          <label>Reorder Level</label>
+          <input id="p-reorder" type="number" min="0" step="1" placeholder="e.g. 10" />
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="flex">
+        <button class="btn" onclick="addProduct()">Add Product</button>
+        <span class="pill">Products: <span id="count-products">0</span></span>
+      </div>
+
+      <div class="hr"></div>
+
+      <h3 class="muted">Tips</h3>
+      <ul class="mini">
+        <li>Set special prices in <b>Price Lists</b> → choose customer → enter product-specific prices.</li>
+        <li>In <b>Orders</b>, price auto-fills from the customer’s list (or base price).</li>
+        <li>Click <b>Save & Print</b> to print a clean bill.</li>
+      </ul>
+    </section>
+
+    <!-- RIGHT: Views -->
+    <section class="card" id="view-orders">
+      <div class="flex">
+        <h2>New Order</h2>
+        <span class="right pill">Offline • Saved in your browser</span>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Customer</label>
+          <select id="order-customer"></select>
+        </div>
+        <div>
+          <label>Order Note</label>
+          <input id="order-note" placeholder="Optional note..." />
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <table id="order-table">
+        <thead>
+          <tr>
+            <th style="width:34%">Product</th>
+            <th class="nowrap">Stock</th>
+            <th class="nowrap">Qty</th>
+            <th class="nowrap">Price (৳)</th>
+            <th class="nowrap">Line Total (৳)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="order-rows"></tbody>
+      </table>
+      <div class="spacer"></div>
+      <div class="flex">
+        <button class="btn" onclick="addOrderRow()">+ Add Item</button>
+        <span class="pill">Quick: change price per row if needed</span>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="grid3">
+        <div>
+          <label>Discount (৳)</label>
+          <input id="disc-abs" type="number" min="0" step="0.01" value="0" oninput="recalcTotals()" />
+        </div>
+        <div>
+          <label>Discount (%)</label>
+          <input id="disc-pct" type="number" min="0" max="100" step="0.01" value="0" oninput="recalcTotals()" />
+        </div>
+        <div>
+          <label>Tax/VAT (%)</label>
+          <input id="tax-pct" type="number" min="0" step="0.01" value="0" oninput="recalcTotals()" />
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="totals">
+        <div class="card" style="background:#0e1733">
+          <div class="n"><span class="muted">Subtotal</span><b id="t-sub">৳0.00</b></div>
+          <div class="n"><span class="muted">Discount</span><b id="t-disc">− ৳0.00</b></div>
+          <div class="n"><span class="muted">Tax</span><b id="t-tax">+ ৳0.00</b></div>
+          <div class="hr"></div>
+          <div class="n" style="font-size:18px"><span>Total</span><b id="t-total">৳0.00</b></div>
+        </div>
+        <div>
+          <label>Paid Amount (৳)</label>
+          <input id="paid-amt" type="number" min="0" step="0.01" value="0" oninput="recalcTotals()" />
+          <div class="spacer"></div>
+          <div class="notice">
+            <div class="n"><span>Due</span><b id="t-due">৳0.00</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sticky-actions no-print" style="margin-top:12px">
+        <div class="flex">
+          <button class="btn primary" onclick="saveOrder(true)">Save & Print</button>
+          <button class="btn" onclick="saveOrder(false)">Save (no print)</button>
+          <button class="btn ghost" onclick="newOrder()">Clear</button>
+          <span class="right pill">Orders Saved: <span id="count-orders">0</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Customers -->
+    <section class="card" id="view-customers" style="display:none">
+      <div class="flex"><h2>Customers</h2></div>
+      <table id="tbl-customers">
+        <thead>
+          <tr><th>Name</th><th>Phone/Note</th><th>ID</th><th style="width:90px"></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Products -->
+    <section class="card" id="view-products" style="display:none">
+      <div class="flex"><h2>Products</h2></div>
+      <table id="tbl-products">
+        <thead>
+          <tr>
+            <th>Name</th><th>SKU</th><th>Unit</th><th>Base Price</th><th>Stock</th><th>Reorder</th><th style="width:110px"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Prices -->
+    <section class="card" id="view-prices" style="display:none">
+      <div class="flex">
+        <h2>Price Lists</h2>
+        <span class="right pill">Set different prices per customer</span>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <div>
+          <label>Choose Customer</label>
+          <select id="price-customer" onchange="renderPriceList()"></select>
+        </div>
+        <div class="notice">
+          Enter special price. Keep empty to use Base Price.
+        </div>
+      </div>
+      <table id="tbl-prices">
+        <thead>
+          <tr><th>Product</th><th>Base (৳)</th><th>Special Price (৳)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="spacer"></div>
+      <button class="btn primary" onclick="savePriceList()">Save Price List</button>
+    </section>
+
+    <!-- Settings -->
+    <section class="card" id="view-settings" style="display:none">
+      <h2>Settings / Data</h2>
+      <div class="grid2">
+        <div class="card" style="background:#0e1733">
+          <h3>Business Info (for invoice)</h3>
+          <div class="spacer"></div>
+          <label>Shop Name</label>
+          <input id="biz-name" placeholder="e.g. SnapGear" />
+          <div class="spacer"></div>
+          <label>Address</label>
+          <textarea id="biz-addr" rows="3" placeholder="Street, City, Phone"></textarea>
+          <div class="spacer"></div>
+          <button class="btn" onclick="saveBusiness()">Save Business Info</button>
+        </div>
+        <div class="card" style="background:#0e1733">
+          <h3>Backup & Demo</h3>
+          <div class="spacer"></div>
+          <div class="flex">
+            <button class="btn" onclick="exportData()">Export JSON</button>
+            <label class="btn" style="cursor:pointer">
+              Import JSON
+              <input id="import-file" type="file" accept="application/json" style="display:none" onchange="importData(event)" />
+            </label>
+            <button class="btn ghost" onclick="loadDemo()">Load Demo Data</button>
+            <button class="btn danger" onclick="resetAll()">Reset All</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="notice mini">All data is stored in your browser (localStorage). Export regularly for safety.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRINT AREA -->
+    <section class="print-area" style="display:none">
+      <div class="print-invoice" id="print-invoice"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ========== Data Layer (localStorage) ========== */
+const LS_KEY = "ib_app_data_v1";
+const App = {
+  customers: [],
+  products: [],
+  priceRules: {}, // { customerId: { productId: price } }
+  orders: [],
+  business: { name:"", addr:"" },
+};
+
+function uid(){ return Math.random().toString(36).slice(2,9) }
+
+function load(){
+  const s = localStorage.getItem(LS_KEY);
+  if(s){
+    try{ Object.assign(App, JSON.parse(s)) }catch(e){ console.warn("Load error", e) }
+  }
+}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(App)) }
+
+/* ========== UI Helpers ========== */
+const $$ = sel => document.querySelector(sel);
+const $$$ = sel => document.querySelectorAll(sel);
+function money(n){ n = Number(n||0); return "৳"+n.toFixed(2) }
+
+/* ========== Init + Nav ========== */
+load();
+setupNav();
+renderAll();
+
+function setupNav(){
+  $$(".nav").addEventListener("click", (e)=>{
+    if(!e.target.classList.contains("tab")) return;
+    $$$(".tab").forEach(t=>t.classList.remove("active"));
+    e.target.classList.add("active");
+    const v = e.target.dataset.v;
+    ["orders","customers","products","prices","settings"].forEach(k=>{
+      $$("#view-"+k).style.display = (k===v) ? "" : "none";
+    });
+  });
+}
+
+/* ========== Renderers ========== */
+function renderAll(){
+  renderCounts();
+  renderCustomersTable();
+  renderProductsTable();
+  renderCustomerSelects();
+  renderPriceList();
+  newOrder(); // fresh order form
+  renderBusiness();
+  $$("#count-orders").textContent = App.orders.length;
+}
+function renderCounts(){
+  $$("#count-customers").textContent = App.customers.length;
+  $$("#count-products").textContent = App.products.length;
+}
+function renderCustomersTable(){
+  const tb = $$("#tbl-customers tbody");
+  tb.innerHTML = "";
+  App.customers.forEach(c=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.phone||"")}</td>
+      <td class="muted">${c.id}</td>
+      <td>
+        <div class="flex">
+          <button class="btn mini" onclick='editCustomer("${c.id}")'>Edit</button>
+          <button class="btn danger mini" onclick='deleteCustomer("${c.id}")'>Del</button>
+        </div>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+function renderProductsTable(){
+  const tb = $$("#tbl-products tbody");
+  tb.innerHTML = "";
+  App.products.forEach(p=>{
+    const low = (Number(p.stock||0) <= Number(p.reorder||0));
+    const stockPill = `<span class="pill" title="Reorder ≤ ${p.reorder||0}" style="${low?'border-color:#ff8a7b;color:#ffb6ae':''}">Stock: ${p.stock||0}</span>`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(p.name)}</td>
+      <td>${escapeHtml(p.sku||"")}</td>
+      <td>${escapeHtml(p.unit||"")}</td>
+      <td>${money(Number(p.basePrice||0))}</td>
+      <td>${stockPill}</td>
+      <td>${p.reorder||0}</td>
+      <td>
+        <div class="flex">
+          <button class="btn mini" onclick='editProduct("${p.id}")'>Edit</button>
+          <button class="btn danger mini" onclick='deleteProduct("${p.id}")'>Del</button>
+        </div>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+function renderCustomerSelects(){
+  const sel1 = $$("#order-customer");
+  const sel2 = $$("#price-customer");
+  [sel1, sel2].forEach(sel=>{
+    sel.innerHTML = App.customers.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  });
+}
+function renderPriceList(){
+  const cid = $$("#price-customer").value || (App.customers[0]?.id || "");
+  if(!cid){ $$("#tbl-prices tbody").innerHTML = `<tr><td colspan="3" class="muted">Add a customer first.</td></tr>`; return; }
+  const tb = $$("#tbl-prices tbody");
+  tb.innerHTML = "";
+  const rules = App.priceRules[cid] || {};
+  App.products.forEach(p=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(p.name)} <span class="tag">(${escapeHtml(p.sku||"")})</span></td>
+      <td>${money(Number(p.basePrice||0))}</td>
+      <td><input data-pid="${p.id}" class="price-input" type="number" min="0" step="0.01" placeholder="(base)" value="${rules[p.id]??""}"></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function renderBusiness(){
+  $$("#biz-name").value = App.business.name || "";
+  $$("#biz-addr").value = App.business.addr || "";
+}
+
+/* ========== Add / Edit Entities ========== */
+function addCustomer(){
+  const name = $$("#c-name").value.trim();
+  if(!name) return alert("Enter customer name.");
+  const c = { id: uid(), name, phone: $$("#c-phone").value.trim() };
+  App.customers.push(c); save();
+  $$("#c-name").value=""; $$("#c-phone").value="";
+  renderCounts(); renderCustomersTable(); renderCustomerSelects(); renderPriceList();
+}
+function editCustomer(id){
+  const c = App.customers.find(x=>x.id===id); if(!c) return;
+  const name = prompt("Edit name:", c.name); if(name===null) return;
+  c.name = name.trim() || c.name;
+  const phone = prompt("Edit phone/note:", c.phone||""); if(phone!==null) c.phone = phone.trim();
+  save(); renderCustomersTable(); renderCustomerSelects();
+}
+function deleteCustomer(id){
+  if(!confirm("Delete this customer?")) return;
+  App.customers = App.customers.filter(x=>x.id!==id);
+  delete App.priceRules[id];
+  save(); renderAll();
+}
+
+function addProduct(){
+  const name = $$("#p-name").value.trim(); if(!name) return alert("Enter product name.");
+  const p = {
+    id: uid(),
+    name,
+    sku: $$("#p-sku").value.trim(),
+    unit: $$("#p-unit").value.trim(),
+    basePrice: Number($$("#p-price").value || 0),
+    stock: Number($$("#p-stock").value || 0),
+    reorder: Number($$("#p-reorder").value || 0),
+  };
+  App.products.push(p); save();
+  ["#p-name","#p-sku","#p-unit","#p-price","#p-stock","#p-reorder"].forEach(s=> $$(s).value="");
+  renderCounts(); renderProductsTable(); renderPriceList();
+}
+function editProduct(id){
+  const p = App.products.find(x=>x.id===id); if(!p) return;
+  const name = prompt("Edit name:", p.name); if(name===null) return; p.name = name.trim() || p.name;
+  const sku = prompt("Edit SKU:", p.sku||""); if(sku!==null) p.sku = sku.trim();
+  const unit = prompt("Edit unit:", p.unit||""); if(unit!==null) p.unit = unit.trim();
+  const bp = prompt("Edit base price:", p.basePrice); if(bp!==null) p.basePrice = Number(bp)||0;
+  const st = prompt("Edit stock:", p.stock); if(st!==null) p.stock = Number(st)||0;
+  const ro = prompt("Edit reorder level:", p.reorder); if(ro!==null) p.reorder = Number(ro)||0;
+  save(); renderProductsTable(); renderPriceList();
+}
+function deleteProduct(id){
+  if(!confirm("Delete this product?")) return;
+  App.products = App.products.filter(x=>x.id!==id);
+  // remove from price rules
+  Object.keys(App.priceRules).forEach(cid=>{
+    if(App.priceRules[cid] && App.priceRules[cid][id]!==undefined){
+      delete App.priceRules[cid][id];
+    }
+  });
+  save(); renderAll();
+}
+
+/* ========== Price Lists ========== */
+function savePriceList(){
+  const cid = $$("#price-customer").value; if(!cid) return alert("Choose a customer.");
+  const rules = {};
+  $$$(".price-input").forEach(inp=>{
+    const v = inp.value.trim();
+    if(v!=="") rules[inp.dataset.pid] = Number(v)||0;
+  });
+  App.priceRules[cid] = rules;
+  save();
+  alert("Price list saved for this customer.");
+}
+
+/* ========== Orders ========== */
+let order = null;
+
+function newOrder(){
+  order = { id: uid(), date: new Date().toISOString(), customerId: App.customers[0]?.id || "", items: [], discAbs:0, discPct:0, taxPct:0, paid:0, note:"" };
+  // set fields
+  $$("#order-customer").value = order.customerId;
+  $$("#order-note").value = "";
+  $$("#disc-abs").value = 0; $$("#disc-pct").value = 0; $$("#tax-pct").value = 0; $$("#paid-amt").value = 0;
+  $$("#order-rows").innerHTML = "";
+  addOrderRow();
+  recalcTotals();
+}
+
+function addOrderRow(pref = {}){
+  const tr = document.createElement("tr");
+  const rowId = uid();
+  tr.dataset.rowId = rowId;
+  tr.innerHTML = `
+    <td>
+      <select class="row-product" onchange="onRowProductChanged('${rowId}')">
+        ${App.products.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.sku||"")})</option>`).join("")}
+      </select>
+    </td>
+    <td class="muted"><span class="stock-cell">0</span></td>
+    <td><input class="row-qty w-60" type="number" min="1" step="1" value="${pref.qty||1}" oninput="recalcTotals()"></td>
+    <td><input class="row-price w-90" type="number" min="0" step="0.01" value="0" oninput="recalcTotals()"></td>
+    <td class="line-total">৳0.00</td>
+    <td><button class="btn danger mini" onclick="removeRow('${rowId}')">✕</button></td>
+  `;
+  $$("#order-rows").appendChild(tr);
+  // set default product
+  const sel = tr.querySelector(".row-product");
+  if(pref.productId){ sel.value = pref.productId; }
+  onRowProductChanged(rowId);
+}
+
+function removeRow(rowId){
+  const tr = [...$$("#order-rows").children].find(x=>x.dataset.rowId===rowId);
+  if(tr){ tr.remove(); recalcTotals(); }
+}
+
+function onRowProductChanged(rowId){
+  const tr = [...$$("#order-rows").children].find(x=>x.dataset.rowId===rowId);
+  if(!tr) return;
+  const pid = tr.querySelector(".row-product").value;
+  const p = App.products.find(x=>x.id===pid);
+  const cid = $$("#order-customer").value;
+  const special = (App.priceRules[cid]||{})[pid];
+  const price = (special!==undefined && special!=="") ? Number(special) : Number(p?.basePrice||0);
+  tr.querySelector(".row-price").value = price.toFixed(2);
+  tr.querySelector(".stock-cell").textContent = p ? (p.stock||0) : 0;
+  recalcTotals();
+}
+
+function recalcTotals(){
+  const rows = [...$$("#order-rows").children];
+  let subtotal = 0;
+  order.items = rows.map(tr=>{
+    const pid = tr.querySelector(".row-product").value;
+    const qty = Math.max(1, Number(tr.querySelector(".row-qty").value||1));
+    const price = Math.max(0, Number(tr.querySelector(".row-price").value||0));
+    const line = qty * price;
+    tr.querySelector(".line-total").textContent = money(line);
+    subtotal += line;
+    return { productId: pid, qty, price, total: line };
+  });
+
+  const discAbs = Number($$("#disc-abs").value||0);
+  const discPct = Number($$("#disc-pct").value||0);
+  const taxPct = Number($$("#tax-pct").value||0);
+  const afterDisc = Math.max(0, subtotal - discAbs - (subtotal*discPct/100));
+  const tax = (afterDisc * taxPct/100);
+  const total = Math.max(0, afterDisc + tax);
+  const paid = Number($$("#paid-amt").value||0);
+  const due = Math.max(0, total - paid);
+
+  order.customerId = $$("#order-customer").value;
+  order.note = $$("#order-note").value.trim();
+  order.subtotal = round2(subtotal);
+  order.discountAbs = round2(discAbs);
+  order.discountPct = round2(discPct);
+  order.taxPct = round2(taxPct);
+  order.tax = round2(tax);
+  order.total = round2(total);
+  order.paid = round2(paid);
+  order.due = round2(due);
+
+  $$("#t-sub").textContent = money(order.subtotal);
+  $$("#t-disc").textContent = "− " + money(discAbs + (subtotal*discPct/100));
+  $$("#t-tax").textContent = "+ " + money(order.tax);
+  $$("#t-total").textContent = money(order.total);
+  $$("#t-due").textContent = money(order.due);
+}
+
+function saveOrder(shouldPrint){
+  if(!order.items.length){ return alert("Add at least one item."); }
+  if(!order.customerId){ return alert("Select a customer."); }
+  // reduce stock
+  order.items.forEach(it=>{
+    const p = App.products.find(x=>x.id===it.productId);
+    if(p){ p.stock = Math.max(0, Number(p.stock||0) - Number(it.qty||0)); }
+  });
+  App.orders.push({ ...order });
+  save();
+  renderProductsTable();
+  $$("#count-orders").textContent = App.orders.length;
+
+  if(shouldPrint){
+    buildPrint(order);
+    window.print();
+  }
+  newOrder();
+}
+
+function buildPrint(o){
+  const c = App.customers.find(x=>x.id===o.customerId);
+  const biz = App.business;
+  const rowsHtml = o.items.map((it,i)=>{
+    const p = App.products.find(x=>x.id===it.productId);
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(p?.name||"-")}</td>
+      <td style="text-align:right">${it.qty}</td>
+      <td style="text-align:right">${it.price.toFixed(2)}</td>
+      <td style="text-align:right">${it.total.toFixed(2)}</td>
+    </tr>`;
+  }).join("");
+
+  const dt = new Date(o.date);
+  const html = `
+    <h1>${escapeHtml(biz.name || "Invoice")}</h1>
+    <div>${escapeHtml(biz.addr || "")}</div>
+    <hr/>
+    <table style="margin:10px 0 14px 0">
+      <tr><td><b>Invoice #</b></td><td>${o.id}</td></tr>
+      <tr><td><b>Date</b></td><td>${dt.toLocaleString()}</td></tr>
+      <tr><td><b>Customer</b></td><td>${escapeHtml(c?.name||"")}</td></tr>
+      ${c?.phone? `<tr><td><b>Phone</b></td><td>${escapeHtml(c.phone)}</td></tr>`:""}
+      ${o.note? `<tr><td><b>Note</b></td><td>${escapeHtml(o.note)}</td></tr>`:""}
+    </table>
+    <table>
+      <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Price</th><th>Line</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <table style="margin-top:12px; width:100%">
+      <tr><td style="text-align:right"><b>Subtotal</b></td><td style="text-align:right">${o.subtotal.toFixed(2)}</td></tr>
+      <tr><td style="text-align:right"><b>Discount</b></td><td style="text-align:right">${(o.discountAbs + (o.subtotal*o.discountPct/100)).toFixed(2)}</td></tr>
+      <tr><td style="text-align:right"><b>Tax (${o.taxPct}%)</b></td><td style="text-align:right">${o.tax.toFixed(2)}</td></tr>
+      <tr><td style="text-align:right"><b>Total</b></td><td style="text-align:right">${o.total.toFixed(2)}</td></tr>
+      <tr><td style="text-align:right"><b>Paid</b></td><td style="text-align:right">${o.paid.toFixed(2)}</td></tr>
+      <tr><td style="text-align:right"><b>Due</b></td><td style="text-align:right">${o.due.toFixed(2)}</td></tr>
+    </table>
+    <p style="margin-top:18px">Thank you.</p>
+  `;
+  const div = $$("#print-invoice");
+  div.innerHTML = html;
+  // show print area for @media print
+  div.parentElement.style.display = "block";
+}
+
+/* ========== Settings helpers ========== */
+function saveBusiness(){
+  App.business.name = $$("#biz-name").value.trim();
+  App.business.addr = $$("#biz-addr").value.trim();
+  save();
+  alert("Saved.");
+}
+
+function exportData(){
+  const b = new Blob([JSON.stringify(App,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(b);
+  const a = document.createElement("a");
+  a.href = url; a.download = "inventory-billing-backup.json";
+  a.click(); URL.revokeObjectURL(url);
+}
+function importData(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      ["customers","products","priceRules","orders","business"].forEach(k=>{
+        if(data[k]!==undefined) App[k] = data[k];
+      });
+      save(); renderAll();
+      alert("Imported.");
+    }catch(e){ alert("Invalid JSON."); }
+  };
+  reader.readAsText(f);
+}
+function loadDemo(){
+  if(!confirm("Load demo data? This will add sample items & customers.")) return;
+  if(App.customers.length===0){
+    App.customers.push({id:uid(), name:"Rafi", phone:"017xxxxxxxx"});
+    App.customers.push({id:uid(), name:"Sami", phone:"018xxxxxxxx"});
+  }
+  if(App.products.length===0){
+    App.products.push({id:uid(), name:"Notebook A5", sku:"NB-A5", unit:"pcs", basePrice:300, stock:40, reorder:10});
+    App.products.push({id:uid(), name:"Gel Pen Blue", sku:"PEN-B", unit:"pcs", basePrice:25, stock:200, reorder:50});
+    App.products.push({id:uid(), name:"Stapler", sku:"ST-01", unit:"pcs", basePrice:200, stock:15, reorder:5});
+  }
+  // set sample special prices: Rafi gets 200 for Stapler, Sami gets 300
+  const rafi = App.customers.find(c=>c.name.toLowerCase()==="rafi");
+  const sami = App.customers.find(c=>c.name.toLowerCase()==="sami");
+  const stapler = App.products.find(p=>/stapler/i.test(p.name));
+  App.priceRules[rafi?.id||""] = App.priceRules[rafi?.id||""] || {};
+  App.priceRules[sami?.id||""] = App.priceRules[sami?.id||""] || {};
+  if(stapler){
+    if(rafi) App.priceRules[rafi.id][stapler.id] = 200;
+    if(sami) App.priceRules[sami.id][stapler.id] = 300;
+  }
+  save(); renderAll();
+}
+function resetAll(){
+  if(!confirm("Reset ALL data? This cannot be undone.")) return;
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+
+/* ========== Utils ========== */
+function round2(n){ return Math.round(Number(n||0)*100)/100 }
+function escapeHtml(s=""){
+  return s.replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+}
+
+/* ========== Event binds ========== */
+$$("#order-customer").addEventListener("change", ()=>{
+  // refresh row prices using this customer's price list
+  [...$$("#order-rows").children].forEach(tr=>{
+    const rowId = tr.dataset.rowId;
+    onRowProductChanged(rowId);
+  });
+});
+
+/* First-time demo if empty */
+if(!localStorage.getItem(LS_KEY) || (App.customers.length===0 && App.products.length===0)){
+  // preload tiny demo softly (no overwrite)
+  loadDemo();
+}
+</script>
+</body>
+</html>
